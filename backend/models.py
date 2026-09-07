@@ -1,19 +1,65 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Column,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
 
+meeting_participants = Table(
+    "meeting_participants",
+    Base.metadata,
+    Column(
+        "meeting_id",
+        ForeignKey("meetings.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "participant_id",
+        ForeignKey("participants.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
 class Meeting(Base):
     __tablename__ = "meetings"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    date: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+    )
+
+    duration_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    summary: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -30,7 +76,7 @@ class Meeting(Base):
 
     participants = relationship(
         "Participant",
-        secondary="meeting_participants",
+        secondary=meeting_participants,
         back_populates="meetings",
     )
 
@@ -57,36 +103,42 @@ class Meeting(Base):
 class Participant(Base):
     __tablename__ = "participants"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(150), nullable=False)
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False,
+    )
+
+    email: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    avatar: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
 
     meetings = relationship(
         "Meeting",
-        secondary="meeting_participants",
+        secondary=meeting_participants,
         back_populates="participants",
-    )
-
-
-class MeetingParticipant(Base):
-    __tablename__ = "meeting_participants"
-
-    meeting_id: Mapped[int] = mapped_column(
-        ForeignKey("meetings.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-
-    participant_id: Mapped[int] = mapped_column(
-        ForeignKey("participants.id", ondelete="CASCADE"),
-        primary_key=True,
     )
 
 
 class TranscriptSegment(Base):
     __tablename__ = "transcript_segments"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     meeting_id: Mapped[int] = mapped_column(
         ForeignKey("meetings.id", ondelete="CASCADE"),
@@ -99,12 +151,25 @@ class TranscriptSegment(Base):
         nullable=False,
     )
 
-    start_time: Mapped[float] = mapped_column(nullable=False)
-    end_time: Mapped[float] = mapped_column(nullable=False)
+    start_time: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
 
-    text: Mapped[str] = mapped_column(Text, nullable=False)
+    end_time: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
 
-    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    sequence: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
 
     meeting = relationship(
         "Meeting",
@@ -117,7 +182,11 @@ class TranscriptSegment(Base):
 class ActionItem(Base):
     __tablename__ = "action_items"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     meeting_id: Mapped[int] = mapped_column(
         ForeignKey("meetings.id", ondelete="CASCADE"),
@@ -130,9 +199,15 @@ class ActionItem(Base):
         nullable=True,
     )
 
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
 
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     due_date: Mapped[datetime | None] = mapped_column(
         DateTime,
@@ -162,7 +237,11 @@ class ActionItem(Base):
 class Topic(Base):
     __tablename__ = "topics"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     meeting_id: Mapped[int] = mapped_column(
         ForeignKey("meetings.id", ondelete="CASCADE"),
@@ -181,6 +260,7 @@ class Topic(Base):
     )
 
     timestamp: Mapped[float | None] = mapped_column(
+        Float,
         nullable=True,
     )
 
