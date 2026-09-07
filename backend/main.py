@@ -1,34 +1,42 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
+from routers import action_items, meetings, transcripts
 
-import models
 
-from routers import meetings
-from routers import transcripts
-from routers import action_items
+Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(
     title="Fireflies Meeting Workspace API",
-    description="Backend API for the Fireflies-inspired meeting workspace.",
+    description="Backend API for the Fireflies-inspired meeting notes platform.",
     version="1.0.0",
 )
 
 
+frontend_url = os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:3000",
+)
+
+
+allowed_origins = [
+    origin.strip()
+    for origin in frontend_url.split(",")
+    if origin.strip()
+]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-Base.metadata.create_all(bind=engine)
 
 
 app.include_router(meetings.router)
@@ -45,7 +53,7 @@ def root():
 
 
 @app.get("/health")
-def health_check():
+def health():
     return {
         "status": "healthy",
     }
