@@ -1,17 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
-
-
 from database import get_db
-from models import Meeting
+# 1. Import models directly to reference class attributes
+from models import ActionItem, Meeting, TranscriptSegment
 from schemas import (
     MeetingCreate,
     MeetingListResponse,
     MeetingResponse,
     MeetingUpdate,
 )
-
 
 router = APIRouter(
     prefix="/api/meetings",
@@ -49,14 +47,17 @@ def get_meeting(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
+    # 2. Fixed string loader options to use class-bound attributes
     meeting = (
         db.query(Meeting)
         .options(
             selectinload(Meeting.participants),
-            selectinload(Meeting.transcript_segments)
-            .selectinload("speaker"),
-            selectinload(Meeting.action_items)
-            .selectinload("assignee"),
+            selectinload(Meeting.transcript_segments).selectinload(
+                TranscriptSegment.speaker
+            ),
+            selectinload(Meeting.action_items).selectinload(
+                ActionItem.assignee
+            ),
             selectinload(Meeting.topics),
         )
         .filter(Meeting.id == meeting_id)
