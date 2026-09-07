@@ -8,20 +8,24 @@ import {
   Users,
 } from "lucide-react";
 
+
+
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Meeting } from "@/types/meeting";
 
+import MeetingActions from "./MeetingActions";
 import ActionItems from "./ActionItems";
 import TranscriptPanel from "./TranscriptPanel";
 import AudioPlayer from "./AudioPlayer";
 
 interface MeetingWorkspaceProps {
   meeting: Meeting;
+  onUpdated: (meeting: Meeting) => void;
 }
-
 export default function MeetingWorkspace({
   meeting,
+  onUpdated,
 }: MeetingWorkspaceProps) {
   const router = useRouter();
 
@@ -77,9 +81,10 @@ export default function MeetingWorkspace({
             </div>
           </div>
 
-          <button className="rounded-lg p-2 text-gray-500 hover:bg-gray-100">
-            <MoreHorizontal size={20} />
-          </button>
+          <MeetingActions
+  meeting={meeting}
+  onUpdated={onUpdated}
+/>
         </div>
       </header>
 

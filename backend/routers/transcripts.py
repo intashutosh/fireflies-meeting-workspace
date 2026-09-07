@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
+from pydantic import BaseModel
+from services.transcript_parser import parse_transcript
 
 from database import get_db
-from models import Meeting, TranscriptSegment
+from models import Meeting, Participant, TranscriptSegment
 from schemas import (
     TranscriptSegmentCreate,
     TranscriptSegmentResponse,
@@ -13,6 +15,87 @@ router = APIRouter(
     prefix="/api/transcripts",
     tags=["Transcripts"],
 )
+
+class TranscriptImportRequest(BaseModel):
+    transcript: str
+
+
+@router.post("/meeting/{meeting_id}/import")
+def import_transcript(
+    meeting_id: int,
+    payload: TranscriptImportRequest,
+    db: Session = Depends(get_db),
+):
+    meeting = (
+        db.query(Meeting)
+        .filter(Meeting.id == meeting_id)
+        .first()
+    )
+
+    if not meeting:
+        raise HTTPException(
+            status_code=404,
+            detail="Meeting not found",
+        )
+
+    parsed_segments = parse_transcript(
+        payload.transcript
+    )
+
+    if not parsed_segments:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not parse transcript",
+        )
+
+    speaker_cache = {}
+
+    for segment in parsed_segments:
+        speaker_name = segment["speaker_name"]
+
+        if speaker_name not in speaker_cache:
+            participant = (
+                db.query(Participant)
+                .filter(
+                    Participant.name == speaker_name
+                )
+                .first()
+            )
+
+            if not participant:
+                participant = Participant(
+                    name=speaker_name
+                )
+
+                db.add(participant)
+                db.flush()
+
+            speaker_cache[speaker_name] = participant
+
+            if participant not in meeting.participants:
+                meeting.participants.append(
+                    participant
+                )
+
+        participant = speaker_cache[speaker_name]
+
+        transcript_segment = TranscriptSegment(
+            meeting_id=meeting.id,
+            speaker_id=participant.id,
+            start_time=segment["sequence"] * 10,
+            end_time=(segment["sequence"] + 1) * 10,
+            text=segment["text"],
+            sequence=segment["sequence"],
+        )
+
+        db.add(transcript_segment)
+
+    db.commit()
+
+    return {
+        "message": "Transcript imported successfully",
+        "segments_created": len(parsed_segments),
+    }
 
 
 @router.get(

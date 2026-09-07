@@ -79,7 +79,10 @@ export default function MeetingPage() {
 
   return (
   <AppShell>
-    <MeetingWorkspace meeting={meeting} />
+    <MeetingWorkspace
+  meeting={meeting}
+  onUpdated={setMeeting}
+/>
   </AppShell>
 );
 }

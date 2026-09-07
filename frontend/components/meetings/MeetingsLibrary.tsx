@@ -9,6 +9,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
+import Toast from "@/components/ui/Toast";
+import CreateMeetingModal from "./CreateMeetingModal";
 import { apiFetch } from "@/lib/api";
 import type { MeetingListItem } from "@/types/meeting";
 
@@ -17,9 +19,15 @@ import MeetingCard from "./MeetingCard";
 type SortOption = "newest" | "oldest";
 
 export default function MeetingsLibrary() {
+    const [toast, setToast] = useState<{
+  message: string;
+  type: "success" | "error";
+} | null>(null);
   const [meetings, setMeetings] = useState<MeetingListItem[]>([]);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("newest");
+  const [createModalOpen, setCreateModalOpen] =
+  useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +56,45 @@ export default function MeetingsLibrary() {
 
     loadMeetings();
   }, []);
+const handleDelete = async (meetingId: number) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this meeting?"
+  );
 
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await apiFetch(`/api/meetings/${meetingId}`, {
+      method: "DELETE",
+    });
+
+    setMeetings((currentMeetings) =>
+      currentMeetings.filter((meeting) => meeting.id !== meetingId)
+    );
+
+    setToast({
+      message: "Meeting deleted successfully",
+      type: "success",
+    });
+
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  } catch (error) {
+    console.error("Failed to delete meeting:", error);
+
+    setToast({
+      message: "Failed to delete meeting",
+      type: "error",
+    });
+
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
+  }
+};
   const filteredMeetings = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -94,10 +140,12 @@ export default function MeetingsLibrary() {
             </p>
           </div>
 
-          <button className="flex items-center gap-2 rounded-lg bg-[#6d5dfc] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#5f50ed]">
+          <button
+  onClick={() => setCreateModalOpen(true)}
+  className="flex items-center gap-2 rounded-lg bg-[#6d5dfc] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#5f50ed]">
             <Plus className="h-4 w-4" />
-            New meeting
-          </button>
+  New meeting
+</button>
         </div>
       </header>
 
@@ -223,14 +271,42 @@ export default function MeetingsLibrary() {
           filteredMeetings.length > 0 && (
             <div className="mt-3 space-y-2.5">
               {filteredMeetings.map((meeting) => (
-                <MeetingCard
-                  key={meeting.id}
-                  meeting={meeting}
-                />
-              ))}
+  <MeetingCard
+    key={meeting.id}
+    meeting={meeting}
+    onDelete={handleDelete}
+  />
+))}
             </div>
           )}
       </div>
+      <CreateMeetingModal
+  open={createModalOpen}
+  onClose={() => setCreateModalOpen(false)}
+  onCreated={(meeting) => {
+    setCreateModalOpen(false);
+
+    setMeetings((currentMeetings) => [
+      {
+        id: meeting.id,
+        title: meeting.title,
+        date: meeting.date,
+        duration_seconds: meeting.duration_seconds,
+        summary: meeting.summary,
+        participants: meeting.participants,
+      },
+      ...currentMeetings,
+    ]);
+  }}
+/>
+
+  {toast && (
+  <Toast
+    message={toast.message}
+    type={toast.type}
+    onClose={() => setToast(null)}
+  />
+)}
     </div>
   );
 }
