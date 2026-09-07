@@ -12,6 +12,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Meeting } from "@/types/meeting";
 
+import ActionItems from "./ActionItems";
 import TranscriptPanel from "./TranscriptPanel";
 import AudioPlayer from "./AudioPlayer";
 
@@ -28,6 +29,9 @@ export default function MeetingWorkspace({
 
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [actionItems, setActionItems] = useState(
+    meeting.action_items
+  );
 
   const durationMinutes = Math.floor(
     meeting.duration_seconds / 60
@@ -118,40 +122,12 @@ export default function MeetingWorkspace({
             </div>
           </div>
 
-          {/* Action items */}
-          <div className="mt-8">
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">
-              Action items
-            </h2>
-
-            <div className="space-y-3">
-              {meeting.action_items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-start gap-3 rounded-lg border border-gray-200 p-4"
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.completed}
-                    readOnly
-                    className="mt-1"
-                  />
-
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {item.title}
-                    </p>
-
-                    {item.description && (
-                      <p className="mt-1 text-sm text-gray-500">
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* Action items component */}
+<ActionItems
+  meetingId={meeting.id}
+  items={actionItems}
+  onChange={setActionItems}
+/>
         </section>
 
         {/* Right panel - Transcript Component */}
