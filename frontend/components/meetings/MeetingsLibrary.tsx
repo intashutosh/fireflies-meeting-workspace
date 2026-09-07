@@ -1,54 +1,44 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  ChevronDown,
-  Filter,
-  Plus,
-  Search,
-  SlidersHorizontal,
-} from "lucide-react";
-
-import Toast from "@/components/ui/Toast";
-import CreateMeetingModal from "./CreateMeetingModal";
-import { apiFetch } from "@/lib/api";
-import type { MeetingListItem } from "@/types/meeting";
+import { CalendarDays, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 
 import MeetingCard from "./MeetingCard";
+import CreateMeetingModal from "./CreateMeetingModal";
+import Toast from "@/components/ui/Toast";
+import { apiFetch } from "@/lib/api";
+import type { MeetingListItem } from "@/types/meeting";
 
 type SortOption = "newest" | "oldest";
 
 export default function MeetingsLibrary() {
-    const [toast, setToast] = useState<{
-  message: string;
-  type: "success" | "error";
-} | null>(null);
   const [meetings, setMeetings] = useState<MeetingListItem[]>([]);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("newest");
-  const [createModalOpen, setCreateModalOpen] =
-  useState(false);
+  const [participantFilter, setParticipantFilter] = useState("all");
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
   useEffect(() => {
     async function loadMeetings() {
       try {
         setLoading(true);
-        setError(null);
+        setError("");
 
-        const data = await apiFetch<MeetingListItem[]>(
-          "/api/meetings"
-        );
+        const data = await apiFetch<MeetingListItem[]>("/api/meetings");
 
         setMeetings(data);
       } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Unable to load meetings."
-        );
+        console.error("Failed to load meetings:", err);
+        setError("Unable to load meetings. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -56,171 +46,230 @@ export default function MeetingsLibrary() {
 
     loadMeetings();
   }, []);
-const handleDelete = async (meetingId: number) => {
-  const confirmed = window.confirm(
-    "Are you sure you want to delete this meeting?"
-  );
 
-  if (!confirmed) {
-    return;
-  }
+  const participants = useMemo(() => {
+    return Array.from(
+      new Map(
+        meetings
+          .flatMap((meeting) => meeting.participants)
+          .map((participant) => [participant.id, participant])
+      ).values()
+    ).sort((a, b) => a.name.localeCompare(b.name));
+  }, [meetings]);
 
-  try {
-    await apiFetch(`/api/meetings/${meetingId}`, {
-      method: "DELETE",
-    });
+  const filteredMeetings = useMemo(() => {
+    const searchText = search.trim().toLowerCase();
 
-    setMeetings((currentMeetings) =>
-      currentMeetings.filter((meeting) => meeting.id !== meetingId)
+    return meetings
+      .filter((meeting) => {
+        const matchesSearch =
+          !searchText ||
+          meeting.title.toLowerCase().includes(searchText) ||
+          meeting.participants.some((participant) =>
+            participant.name.toLowerCase().includes(searchText)
+          );
+
+        const matchesParticipant =
+          participantFilter === "all" ||
+          meeting.participants.some(
+            (participant) =>
+              participant.id.toString() === participantFilter
+          );
+
+        return matchesSearch && matchesParticipant;
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+
+        return sort === "newest"
+          ? dateB - dateA
+          : dateA - dateB;
+      });
+  }, [meetings, search, participantFilter, sort]);
+
+  const hasFilters =
+    search.trim().length > 0 || participantFilter !== "all";
+
+  const clearFilters = () => {
+    setSearch("");
+    setParticipantFilter("all");
+    setSort("newest");
+  };
+
+  const handleDelete = async (meetingId: number) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this meeting?"
     );
 
-    setToast({
-      message: "Meeting deleted successfully",
-      type: "success",
-    });
-
-    setTimeout(() => {
-      setToast(null);
-    }, 3000);
-  } catch (error) {
-    console.error("Failed to delete meeting:", error);
-
-    setToast({
-      message: "Failed to delete meeting",
-      type: "error",
-    });
-
-    setTimeout(() => {
-      setToast(null);
-    }, 3000);
-  }
-};
-  const filteredMeetings = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    let result = meetings;
-
-    if (query) {
-      result = meetings.filter((meeting) => {
-        const titleMatch = meeting.title
-          .toLowerCase()
-          .includes(query);
-
-        const participantMatch = meeting.participants.some(
-          (participant) =>
-            participant.name.toLowerCase().includes(query)
-        );
-
-        return titleMatch || participantMatch;
-      });
+    if (!confirmed) {
+      return;
     }
 
-    return [...result].sort((a, b) => {
-      const first = new Date(a.date).getTime();
-      const second = new Date(b.date).getTime();
+    try {
+      await apiFetch(`/api/meetings/${meetingId}`, {
+        method: "DELETE",
+      });
 
-      return sort === "newest"
-        ? second - first
-        : first - second;
+      setMeetings((currentMeetings) =>
+        currentMeetings.filter((meeting) => meeting.id !== meetingId)
+      );
+
+      setToast({
+        message: "Meeting deleted successfully",
+        type: "success",
+      });
+    } catch (err) {
+      console.error("Failed to delete meeting:", err);
+
+      setToast({
+        message: "Failed to delete meeting",
+        type: "error",
+      });
+    }
+  };
+
+  const handleCreated = (meeting: MeetingListItem) => {
+    setMeetings((currentMeetings) => [meeting, ...currentMeetings]);
+
+    setToast({
+      message: "Meeting created successfully",
+      type: "success",
     });
-  }, [meetings, search, sort]);
+  };
 
   return (
-    <div className="h-screen overflow-y-auto">
+    <div className="min-h-screen bg-[#fafafa]">
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-gray-200 bg-[#fafafa]/95 backdrop-blur">
-        <div className="flex h-16 items-center justify-between px-6 lg:px-8">
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between px-8 py-5">
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
               Meetings
             </h1>
 
-            <p className="mt-0.5 text-xs text-gray-500">
-              Your conversations and meeting notes
+            <p className="mt-1 text-sm text-gray-500">
+              Browse and manage your meeting recordings and notes.
             </p>
           </div>
 
           <button
-  onClick={() => setCreateModalOpen(true)}
-  className="flex items-center gap-2 rounded-lg bg-[#6d5dfc] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#5f50ed]">
-            <Plus className="h-4 w-4" />
-  New meeting
-</button>
+            type="button"
+            onClick={() => setCreateModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-[#6d5dfc] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5c4ded]"
+          >
+            <Plus size={17} />
+            New meeting
+          </button>
         </div>
       </header>
 
-      {/* Content */}
-      <div className="mx-auto max-w-[1200px] px-6 py-7 lg:px-8">
+      <main className="mx-auto max-w-[1500px] px-8 py-6">
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          {/* Search */}
-          <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            {/* Search */}
+            <div className="relative min-w-0 flex-1">
+              <Search
+                size={17}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
 
-            <input
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
-              placeholder="Search meetings or participants..."
-              className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#8b80f8] focus:ring-2 focus:ring-[#6d5dfc]/10"
-            />
-          </div>
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search meetings or participants..."
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-10 text-sm outline-none transition focus:border-[#6d5dfc] focus:bg-white"
+              />
 
-          {/* Filters */}
-          <div className="flex items-center gap-2">
-            <button className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 transition hover:bg-gray-50">
-              <Filter className="h-4 w-4" />
-              Filter
-            </button>
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                  aria-label="Clear search"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
 
-            <div className="relative">
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 px-1 text-sm text-gray-500">
+                <SlidersHorizontal size={15} />
+                Filters
+              </div>
+
+              <select
+                value={participantFilter}
+                onChange={(event) =>
+                  setParticipantFilter(event.target.value)
+                }
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-[#6d5dfc]"
+              >
+                <option value="all">All participants</option>
+
+                {participants.map((participant) => (
+                  <option
+                    key={participant.id}
+                    value={participant.id}
+                  >
+                    {participant.name}
+                  </option>
+                ))}
+              </select>
+
               <select
                 value={sort}
                 onChange={(event) =>
-                  setSort(
-                    event.target.value as SortOption
-                  )
+                  setSort(event.target.value as SortOption)
                 }
-                className="h-10 appearance-none rounded-lg border border-gray-200 bg-white py-0 pl-3 pr-9 text-sm font-medium text-gray-600 outline-none hover:bg-gray-50"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-[#6d5dfc]"
               >
-                <option value="newest">
-                  Newest first
-                </option>
-
-                <option value="oldest">
-                  Oldest first
-                </option>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
               </select>
 
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
+                >
+                  Clear
+                </button>
+              )}
             </div>
-
-            <button
-              className="hidden h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 transition hover:bg-gray-50 sm:flex"
-              aria-label="View settings"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-            </button>
           </div>
         </div>
 
-        {/* Results count */}
-        <div className="mt-7 flex items-center justify-between">
-          <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
-            {search
-              ? `${filteredMeetings.length} results`
-              : `${meetings.length} meetings`}
-          </p>
+        {/* Results header */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <CalendarDays size={16} />
+
+            <span>
+              {filteredMeetings.length}{" "}
+              {filteredMeetings.length === 1 ? "meeting" : "meetings"}
+            </span>
+          </div>
+
+          {hasFilters && !loading && (
+            <span className="text-xs text-gray-400">
+              Filters applied
+            </span>
+          )}
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="mt-3 space-y-3">
-            {Array.from({ length: 5 }).map((_, index) => (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
               <div
                 key={index}
-                className="h-[82px] animate-pulse rounded-xl border border-gray-200 bg-white"
+                className="h-52 animate-pulse rounded-xl border border-gray-200 bg-white"
               />
             ))}
           </div>
@@ -228,85 +277,112 @@ const handleDelete = async (meetingId: number) => {
 
         {/* Error */}
         {!loading && error && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-5">
-            <p className="text-sm font-medium text-red-800">
-              Unable to load meetings
-            </p>
-
-            <p className="mt-1 text-sm text-red-600">
-              Make sure the FastAPI backend is running.
+          <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-10 text-center">
+            <p className="text-sm font-medium text-red-700">
+              {error}
             </p>
 
             <button
+              type="button"
               onClick={() => window.location.reload()}
-              className="mt-3 rounded-lg bg-white px-3 py-2 text-sm font-medium text-red-700 shadow-sm ring-1 ring-red-200"
+              className="mt-4 rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50"
             >
               Try again
             </button>
           </div>
         )}
 
-        {/* Empty */}
+        {/* Empty database */}
+        {!loading && !error && meetings.length === 0 && (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#f1efff]">
+              <CalendarDays
+                size={21}
+                className="text-[#6d5dfc]"
+              />
+            </div>
+
+            <h2 className="mt-4 text-base font-semibold text-gray-900">
+              No meetings yet
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+              Create your first meeting to start building your
+              meeting workspace.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setCreateModalOpen(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#6d5dfc] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#5c4ded]"
+            >
+              <Plus size={17} />
+              Create meeting
+            </button>
+          </div>
+        )}
+
+        {/* No results */}
         {!loading &&
           !error &&
+          meetings.length > 0 &&
           filteredMeetings.length === 0 && (
-            <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                <Search className="h-5 w-5 text-gray-400" />
+                <Search size={20} className="text-gray-500" />
               </div>
 
-              <h2 className="mt-4 text-sm font-semibold text-gray-900">
+              <h2 className="mt-4 text-base font-semibold text-gray-900">
                 No meetings found
               </h2>
 
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-gray-500">
                 Try changing your search or filters.
               </p>
+
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="mt-5 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Clear filters
+              </button>
             </div>
           )}
 
-        {/* Meetings */}
+        {/* Meeting cards */}
         {!loading &&
           !error &&
           filteredMeetings.length > 0 && (
-            <div className="mt-3 space-y-2.5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredMeetings.map((meeting) => (
-  <MeetingCard
-    key={meeting.id}
-    meeting={meeting}
-    onDelete={handleDelete}
-  />
-))}
+                <MeetingCard
+                  key={meeting.id}
+                  meeting={meeting}
+                  onDelete={handleDelete}
+                />
+              ))}
             </div>
           )}
-      </div>
-      <CreateMeetingModal
-  open={createModalOpen}
-  onClose={() => setCreateModalOpen(false)}
-  onCreated={(meeting) => {
-    setCreateModalOpen(false);
+      </main>
 
-    setMeetings((currentMeetings) => [
-      {
-        id: meeting.id,
-        title: meeting.title,
-        date: meeting.date,
-        duration_seconds: meeting.duration_seconds,
-        summary: meeting.summary,
-        participants: meeting.participants,
-      },
-      ...currentMeetings,
-    ]);
-  }}
-/>
+      {/* Create meeting modal */}
+      {createModalOpen && (
+        <CreateMeetingModal
+          open={createModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+          onCreated={handleCreated}
+        />
+      )}
 
-  {toast && (
-  <Toast
-    message={toast.message}
-    type={toast.type}
-    onClose={() => setToast(null)}
-  />
-)}
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

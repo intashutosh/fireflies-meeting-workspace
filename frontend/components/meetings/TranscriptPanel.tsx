@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+
 import type { TranscriptSegment } from "@/types/meeting";
 
 interface TranscriptPanelProps {
@@ -16,6 +17,7 @@ export default function TranscriptPanel({
   onSeek,
 }: TranscriptPanelProps) {
   const [search, setSearch] = useState("");
+
   const activeRef = useRef<HTMLDivElement | null>(null);
 
   const activeSegment = segments.find(
@@ -25,11 +27,11 @@ export default function TranscriptPanel({
   );
 
   const filteredSegments = useMemo(() => {
-    if (!search.trim()) {
+    const query = search.trim().toLowerCase();
+
+    if (!query) {
       return segments;
     }
-
-    const query = search.toLowerCase();
 
     return segments.filter((segment) =>
       segment.text.toLowerCase().includes(query)
@@ -46,9 +48,9 @@ export default function TranscriptPanel({
   }, [activeSegment?.id]);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col">
+    <section className="flex min-h-0 flex-col bg-[#fafafa]">
       {/* Transcript header */}
-      <div className="border-b border-gray-200 px-8 py-5">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-8 py-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
@@ -56,7 +58,7 @@ export default function TranscriptPanel({
             </h2>
 
             <p className="mt-1 text-sm text-gray-500">
-              {segments.length} segments
+              {filteredSegments.length} of {segments.length} segments
             </p>
           </div>
         </div>
@@ -72,13 +74,15 @@ export default function TranscriptPanel({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search transcript..."
-            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-10 text-sm outline-none transition focus:border-gray-400 focus:bg-white"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-10 text-sm outline-none transition focus:border-[#6d5dfc] focus:bg-white"
           />
 
           {search && (
             <button
+              type="button"
               onClick={() => setSearch("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+              aria-label="Clear transcript search"
             >
               <X size={16} />
             </button>
@@ -86,16 +90,26 @@ export default function TranscriptPanel({
         </div>
       </div>
 
-      {/* Transcript */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-8">
+      {/* Transcript content */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 lg:px-8">
         {filteredSegments.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="text-sm text-gray-500">
-              No transcript matches found.
-            </p>
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gray-100">
+                <Search size={18} className="text-gray-400" />
+              </div>
+
+              <p className="mt-3 text-sm font-medium text-gray-700">
+                No transcript matches found
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                Try a different search term.
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="mx-auto max-w-3xl space-y-2">
             {filteredSegments.map((segment) => {
               const isActive = activeSegment?.id === segment.id;
 
@@ -104,28 +118,56 @@ export default function TranscriptPanel({
                   key={segment.id}
                   ref={isActive ? activeRef : null}
                   onClick={() => onSeek(segment.start_time)}
-                  className={`cursor-pointer rounded-xl p-4 transition ${
+                  className={`group cursor-pointer rounded-xl border p-4 transition ${
                     isActive
-                      ? "bg-purple-50 ring-1 ring-purple-100"
-                      : "hover:bg-gray-50"
+                      ? "border-purple-200 bg-purple-50 shadow-sm"
+                      : "border-transparent hover:border-gray-200 hover:bg-white"
                   }`}
                 >
-                  <div className="mb-1 flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900">
-                      {segment.speaker.name}
-                    </span>
+                  <div className="flex gap-3">
+                    {/* Speaker avatar */}
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                        isActive
+                          ? "bg-[#6d5dfc] text-white"
+                          : "bg-gray-200 text-gray-600"
+                      }`}
+                    >
+                      {getInitials(segment.speaker.name)}
+                    </div>
 
-                    <span className="text-xs text-gray-400">
-                      {formatTime(segment.start_time)}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {segment.speaker.name}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSeek(segment.start_time);
+                          }}
+                          className="text-xs tabular-nums text-gray-400 transition hover:text-[#6d5dfc]"
+                        >
+                          {formatTime(segment.start_time)}
+                        </button>
+                      </div>
+
+                      <p
+                        className={`text-sm leading-7 ${
+                          isActive
+                            ? "text-gray-700"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        <HighlightedText
+                          text={segment.text}
+                          query={search}
+                        />
+                      </p>
+                    </div>
                   </div>
-
-                  <p className="text-sm leading-6 text-gray-600">
-                    <HighlightedText
-                      text={segment.text}
-                      query={search}
-                    />
-                  </p>
                 </div>
               );
             })}
@@ -157,7 +199,7 @@ function HighlightedText({
         part.toLowerCase() === query.toLowerCase() ? (
           <mark
             key={index}
-            className="rounded bg-yellow-200 px-0.5"
+            className="rounded bg-yellow-200 px-0.5 text-gray-900"
           >
             {part}
           </mark>
@@ -173,11 +215,22 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function formatTime(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
 
-  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+  return `${minutes
+    .toString()
+    .padStart(2, "0")}:${remainingSeconds
     .toString()
     .padStart(2, "0")}`;
 }
