@@ -1,7 +1,6 @@
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
-from pydantic import BaseModel
-from services.transcript_parser import parse_transcript
 
 from database import get_db
 from models import Meeting, Participant, TranscriptSegment
@@ -9,6 +8,7 @@ from schemas import (
     TranscriptSegmentCreate,
     TranscriptSegmentResponse,
 )
+from services.transcript_parser import parse_transcript
 
 
 router = APIRouter(
@@ -16,8 +16,12 @@ router = APIRouter(
     tags=["Transcripts"],
 )
 
+
 class TranscriptImportRequest(BaseModel):
-    transcript: str
+    transcript: str = Field(
+        min_length=1,
+        max_length=100000,
+    )
 
 
 @router.post("/meeting/{meeting_id}/import")
@@ -45,52 +49,71 @@ def import_transcript(
     if not parsed_segments:
         raise HTTPException(
             status_code=400,
-            detail="Could not parse transcript",
+            detail=(
+                "Could not parse transcript. "
+                "Use the format 'Speaker: text'."
+            ),
         )
 
-    speaker_cache = {}
+    try:
+        # Import represents the current transcript,
+        # so replace any previous imported segments.
+        db.query(TranscriptSegment).filter(
+            TranscriptSegment.meeting_id == meeting_id
+        ).delete(
+            synchronize_session=False
+        )
 
-    for segment in parsed_segments:
-        speaker_name = segment["speaker_name"]
+        speaker_cache: dict[str, Participant] = {}
 
-        if speaker_name not in speaker_cache:
-            participant = (
-                db.query(Participant)
-                .filter(
-                    Participant.name == speaker_name
+        for segment in parsed_segments:
+            speaker_name = segment["speaker_name"]
+
+            if speaker_name not in speaker_cache:
+                participant = (
+                    db.query(Participant)
+                    .filter(
+                        Participant.name == speaker_name
+                    )
+                    .first()
                 )
-                .first()
+
+                if not participant:
+                    participant = Participant(
+                        name=speaker_name
+                    )
+
+                    db.add(participant)
+                    db.flush()
+
+                speaker_cache[speaker_name] = participant
+
+                if participant not in meeting.participants:
+                    meeting.participants.append(
+                        participant
+                    )
+
+            participant = speaker_cache[speaker_name]
+
+            start_time = segment["sequence"] * 10
+            end_time = start_time + 10
+
+            transcript_segment = TranscriptSegment(
+                meeting_id=meeting.id,
+                speaker_id=participant.id,
+                start_time=start_time,
+                end_time=end_time,
+                text=segment["text"],
+                sequence=segment["sequence"],
             )
 
-            if not participant:
-                participant = Participant(
-                    name=speaker_name
-                )
+            db.add(transcript_segment)
 
-                db.add(participant)
-                db.flush()
+        db.commit()
 
-            speaker_cache[speaker_name] = participant
-
-            if participant not in meeting.participants:
-                meeting.participants.append(
-                    participant
-                )
-
-        participant = speaker_cache[speaker_name]
-
-        transcript_segment = TranscriptSegment(
-            meeting_id=meeting.id,
-            speaker_id=participant.id,
-            start_time=segment["sequence"] * 10,
-            end_time=(segment["sequence"] + 1) * 10,
-            text=segment["text"],
-            sequence=segment["sequence"],
-        )
-
-        db.add(transcript_segment)
-
-    db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "message": "Transcript imported successfully",
@@ -155,17 +178,28 @@ def create_transcript_segment(
             detail="Meeting not found",
         )
 
-    segment = TranscriptSegment(
-        meeting_id=meeting_id,
-        speaker_id=segment_data.speaker_id,
-        start_time=segment_data.start_time,
-        end_time=segment_data.end_time,
-        text=segment_data.text,
-        sequence=segment_data.sequence,
-    )
+    if segment_data.end_time < segment_data.start_time:
+        raise HTTPException(
+            status_code=400,
+            detail="End time cannot be before start time",
+        )
 
-    db.add(segment)
-    db.commit()
-    db.refresh(segment)
+    try:
+        segment = TranscriptSegment(
+            meeting_id=meeting_id,
+            speaker_id=segment_data.speaker_id,
+            start_time=segment_data.start_time,
+            end_time=segment_data.end_time,
+            text=segment_data.text.strip(),
+            sequence=segment_data.sequence,
+        )
 
-    return segment
+        db.add(segment)
+        db.commit()
+        db.refresh(segment)
+
+        return segment
+
+    except Exception:
+        db.rollback()
+        raise

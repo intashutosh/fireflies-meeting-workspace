@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-# 1. Import models directly to reference class attributes
 from models import ActionItem, Meeting, TranscriptSegment
 from schemas import (
     MeetingCreate,
@@ -15,6 +14,24 @@ router = APIRouter(
     prefix="/api/meetings",
     tags=["Meetings"],
 )
+
+
+def meeting_with_relationships(db: Session, meeting_id: int):
+    return (
+        db.query(Meeting)
+        .options(
+            selectinload(Meeting.participants),
+            selectinload(Meeting.transcript_segments).selectinload(
+                TranscriptSegment.speaker
+            ),
+            selectinload(Meeting.action_items).selectinload(
+                ActionItem.assignee
+            ),
+            selectinload(Meeting.topics),
+        )
+        .filter(Meeting.id == meeting_id)
+        .first()
+    )
 
 
 @router.get(
@@ -31,9 +48,9 @@ def get_meetings(
         .order_by(Meeting.date.desc())
     )
 
-    if search:
+    if search and search.strip():
         query = query.filter(
-            Meeting.title.ilike(f"%{search}%")
+            Meeting.title.ilike(f"%{search.strip()}%")
         )
 
     return query.all()
@@ -47,21 +64,9 @@ def get_meeting(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
-    # 2. Fixed string loader options to use class-bound attributes
-    meeting = (
-        db.query(Meeting)
-        .options(
-            selectinload(Meeting.participants),
-            selectinload(Meeting.transcript_segments).selectinload(
-                TranscriptSegment.speaker
-            ),
-            selectinload(Meeting.action_items).selectinload(
-                ActionItem.assignee
-            ),
-            selectinload(Meeting.topics),
-        )
-        .filter(Meeting.id == meeting_id)
-        .first()
+    meeting = meeting_with_relationships(
+        db,
+        meeting_id,
     )
 
     if not meeting:
@@ -89,11 +94,19 @@ def create_meeting(
         summary=meeting_data.summary,
     )
 
-    db.add(meeting)
-    db.commit()
-    db.refresh(meeting)
+    try:
+        db.add(meeting)
+        db.commit()
+        db.refresh(meeting)
 
-    return meeting
+        return meeting_with_relationships(
+            db,
+            meeting.id,
+        )
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.patch(
@@ -121,13 +134,26 @@ def update_meeting(
         exclude_unset=True
     )
 
-    for field, value in update_data.items():
-        setattr(meeting, field, value)
+    if not update_data:
+        return meeting_with_relationships(
+            db,
+            meeting_id,
+        )
 
-    db.commit()
-    db.refresh(meeting)
+    try:
+        for field, value in update_data.items():
+            setattr(meeting, field, value)
 
-    return meeting
+        db.commit()
+
+        return meeting_with_relationships(
+            db,
+            meeting_id,
+        )
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.delete(
@@ -150,7 +176,12 @@ def delete_meeting(
             detail="Meeting not found",
         )
 
-    db.delete(meeting)
-    db.commit()
+    try:
+        db.delete(meeting)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
 
     return None
