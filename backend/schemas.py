@@ -136,6 +136,7 @@ class MeetingUpdate(BaseModel):
     date: datetime | None = None
     duration_seconds: int | None = Field(default=None, ge=0)
     summary: str | None = None
+    participant_ids: list[int] | None = None
 
     @field_validator("title")
     @classmethod

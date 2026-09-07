@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
-from routers import action_items, meetings, transcripts
+from routers import action_items, meetings, participants, transcripts
 
 
 Base.metadata.create_all(bind=engine)
@@ -42,6 +42,7 @@ app.add_middleware(
 app.include_router(meetings.router)
 app.include_router(transcripts.router)
 app.include_router(action_items.router)
+app.include_router(participants.router)
 
 
 @app.get("/")

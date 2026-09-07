@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from database import get_db
-from models import ActionItem, Meeting, TranscriptSegment
+from models import ActionItem, Meeting, Participant, TranscriptSegment
 from schemas import (
     MeetingCreate,
     MeetingListResponse,
@@ -141,6 +141,26 @@ def update_meeting(
         )
 
     try:
+        if "participant_ids" in update_data:
+            participant_ids = update_data.pop("participant_ids")
+            if participant_ids is not None:
+                if participant_ids:
+                    found_participants = (
+                        db.query(Participant)
+                        .filter(Participant.id.in_(participant_ids))
+                        .all()
+                    )
+                    found_ids = {p.id for p in found_participants}
+                    missing_ids = set(participant_ids) - found_ids
+                    if missing_ids:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Participant IDs not found: {sorted(list(missing_ids))}",
+                        )
+                    meeting.participants = found_participants
+                else:
+                    meeting.participants = []
+
         for field, value in update_data.items():
             setattr(meeting, field, value)
 
@@ -151,10 +171,13 @@ def update_meeting(
             meeting_id,
         )
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise
-
+        
 
 @router.delete(
     "/{meeting_id}",
