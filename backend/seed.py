@@ -116,6 +116,7 @@ def seed_database():
         print("Database already contains meetings.")
         print("Skipping seed operation.")
         db.close()
+        return
 
     try:
         # --------------------------------------------------
