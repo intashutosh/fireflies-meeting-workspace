@@ -5,7 +5,7 @@ import { MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { apiFetch } from "@/lib/api";
-import type { Meeting } from "@/types/meeting";
+import type { Meeting, Participant } from "@/types/meeting";
 
 interface MeetingActionsProps {
   meeting: Meeting;
@@ -31,6 +31,10 @@ export default function MeetingActions({
   const [summary, setSummary] = useState(
     meeting.summary ?? ""
   );
+  const [allParticipants, setAllParticipants] = useState<Participant[]>([]);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>(
+    meeting.participants.map((p) => p.id)
+  );
 
   useEffect(() => {
     setTitle(meeting.title);
@@ -39,6 +43,7 @@ export default function MeetingActions({
       Math.floor(meeting.duration_seconds / 60).toString()
     );
     setSummary(meeting.summary ?? "");
+    setSelectedParticipantIds(meeting.participants.map((p) => p.id));
   }, [meeting]);
 
   const openEditModal = () => {
@@ -48,9 +53,19 @@ export default function MeetingActions({
       Math.floor(meeting.duration_seconds / 60).toString()
     );
     setSummary(meeting.summary ?? "");
+    setSelectedParticipantIds(meeting.participants.map((p) => p.id));
 
     setMenuOpen(false);
     setEditing(true);
+
+    apiFetch<Participant[]>("/api/participants")
+      .then((data) => {
+        setAllParticipants(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load participants:", err);
+        setAllParticipants(meeting.participants);
+      });
   };
 
   const closeEditModal = () => {
@@ -97,6 +112,7 @@ export default function MeetingActions({
               durationMinutes * 60
             ),
             summary: summary.trim() || null,
+            participant_ids: selectedParticipantIds,
           }),
         }
       );
@@ -239,7 +255,7 @@ export default function MeetingActions({
             </div>
 
             {/* Form */}
-            <div className="space-y-5 px-6 py-6">
+            <div className="max-h-[65vh] space-y-5 overflow-y-auto px-6 py-6">
               {/* Title */}
               <div>
                 <label
@@ -320,10 +336,74 @@ export default function MeetingActions({
                   onChange={(event) =>
                     setSummary(event.target.value)
                   }
-                  rows={5}
+                  rows={4}
                   className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm leading-6 text-gray-900 outline-none transition focus:border-[#6d5dfc] focus:ring-2 focus:ring-[#6d5dfc]/10"
                   placeholder="Add a meeting summary..."
                 />
+              </div>
+
+              {/* Participants */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Participants
+                  </label>
+                  <span className="text-xs text-gray-400">
+                    {selectedParticipantIds.length} selected
+                  </span>
+                </div>
+
+                <div className="max-h-44 space-y-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50/50 p-2">
+                  {allParticipants.length === 0 ? (
+                    <p className="p-3 text-center text-xs text-gray-400">
+                      No participants found
+                    </p>
+                  ) : (
+                    allParticipants.map((p) => {
+                      const isSelected = selectedParticipantIds.includes(p.id);
+
+                      return (
+                        <label
+                          key={p.id}
+                          className={`flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm transition ${
+                            isSelected
+                              ? "bg-[#f1efff] text-purple-950"
+                              : "text-gray-700 hover:bg-gray-100/80"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setSelectedParticipantIds((prev) =>
+                                  isSelected
+                                    ? prev.filter((id) => id !== p.id)
+                                    : [...prev, p.id]
+                                );
+                              }}
+                              className="h-4 w-4 rounded border-gray-300 text-[#6d5dfc] focus:ring-[#6d5dfc]"
+                            />
+
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-700">
+                              {getInitials(p.name)}
+                            </div>
+
+                            <span className="font-medium text-gray-900">
+                              {p.name}
+                            </span>
+                          </div>
+
+                          {p.email && (
+                            <span className="text-xs text-gray-400">
+                              {p.email}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
 
@@ -370,4 +450,13 @@ function formatDateForInput(date: string) {
   return localDate
     .toISOString()
     .slice(0, 16);
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }

@@ -80,29 +80,22 @@ const [creatingItem, setCreatingItem] = useState(false);
     <div className="mt-8">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">
-    Action items
-  </h2>
-
-  <div className="flex items-center gap-3">
-    <span className="text-sm text-gray-400">
-      {items.length}
-    </span>
-
-    <button
-      onClick={() => setCreating(true)}
-      className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
-    >
-      <Plus size={15} />
-      Add
-    </button>
-  </div>
-        <h2 className="text-lg font-semibold text-gray-900">
           Action items
         </h2>
 
-        <span className="text-sm text-gray-400">
-          {items.length}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400">
+            {items.length}
+          </span>
+
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            <Plus size={15} />
+            Add
+          </button>
+        </div>
       </div>
 
       {items.length === 0 ? (

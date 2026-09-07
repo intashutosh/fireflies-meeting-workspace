@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useRef, useState } from "react";
+import { Upload, X } from "lucide-react";
 
 import { apiFetch } from "@/lib/api";
 import type { Meeting } from "@/types/meeting";
@@ -26,8 +26,52 @@ export default function CreateMeetingModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   if (!open) {
     return null;
+  }
+
+  function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const validExtensions = [".txt", ".vtt", ".json"];
+    const fileExtension = file.name
+      .slice(file.name.lastIndexOf("."))
+      .toLowerCase();
+
+    if (!validExtensions.includes(fileExtension)) {
+      setError(
+        "Unsupported file format. Please upload a .txt, .vtt, or .json file."
+      );
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const content = e.target?.result;
+      if (typeof content === "string") {
+        setTranscript(content);
+        setError("");
+      }
+    };
+
+    reader.onerror = () => {
+      setError("Failed to read transcript file. Please try again.");
+    };
+
+    reader.readAsText(file);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   }
 
   async function handleSubmit(
@@ -60,19 +104,25 @@ export default function CreateMeetingModal({
         }
       );
 
-      if (transcript.trim()) {
-  await apiFetch(
-    `/api/transcripts/meeting/${meeting.id}/import`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        transcript: transcript.trim(),  
-      }),
-    }
-  );
-}
+      let finalMeeting = meeting;
 
-      onCreated(meeting);
+      if (transcript.trim()) {
+        await apiFetch(
+          `/api/transcripts/meeting/${meeting.id}/import`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              transcript: transcript.trim(),
+            }),
+          }
+        );
+
+        finalMeeting = await apiFetch<Meeting>(
+          `/api/meetings/${meeting.id}`
+        );
+      }
+
+      onCreated(finalMeeting);
 
       setTitle("");
       setDate("");
@@ -194,9 +244,30 @@ export default function CreateMeetingModal({
 
           {/* Transcript */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">
-              Transcript
-            </label>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">
+                Transcript
+              </label>
+
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.vtt,.json"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-900"
+                >
+                  <Upload size={13} />
+                  Upload transcript (.txt, .vtt, .json)
+                </button>
+              </div>
+            </div>
 
             <textarea
               value={transcript}
