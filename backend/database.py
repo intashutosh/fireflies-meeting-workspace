@@ -7,10 +7,15 @@ DATABASE_URL = os.getenv(
     "sqlite:///./fireflies.db",
 )
 
+# Automatically add secure=true if connecting to Turso without it
+if "turso.io" in DATABASE_URL and "secure=" not in DATABASE_URL:
+    separator = "&" if "?" in DATABASE_URL else "?"
+    DATABASE_URL = f"{DATABASE_URL}{separator}secure=true"
+
 connect_args = {}
 
-# Only apply check_same_thread to local file-based SQLite connections
-if DATABASE_URL.startswith("sqlite://"):
+# ONLY apply check_same_thread to local file SQLite (sqlite:///)
+if DATABASE_URL.startswith("sqlite:///"):
     connect_args = {"check_same_thread": False}
 
 engine = create_engine(
