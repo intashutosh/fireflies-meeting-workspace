@@ -26,7 +26,9 @@ export default function MeetingWorkspace({
   const router = useRouter();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-
+    const [audioDuration, setAudioDuration] = useState(
+  meeting.duration_seconds
+);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [actionItems, setActionItems] = useState(
@@ -145,38 +147,46 @@ export default function MeetingWorkspace({
       </main>
 
       <audio
-        ref={audioRef}
-        onTimeUpdate={() => {
-          if (audioRef.current) {
-            setCurrentTime(audioRef.current.currentTime);
-          }
-        }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-      />
+  ref={audioRef}
+  src="/audio/demo-meeting.mp3"
+  preload="metadata"
+  onLoadedMetadata={() => {
+    if (audioRef.current) {
+      setAudioDuration(audioRef.current.duration);
+    }
+  }}
+  onTimeUpdate={() => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  }}
+  onPlay={() => setIsPlaying(true)}
+  onPause={() => setIsPlaying(false)}
+  onEnded={() => setIsPlaying(false)}
+/>
 
       {/* Audio player */}
       <AudioPlayer
-        duration={meeting.duration_seconds}
-        currentTime={currentTime}
-        isPlaying={isPlaying}
-        onTimeChange={(time) => {
-          if (audioRef.current) {
-            audioRef.current.currentTime = time;
-          }
+  duration={audioDuration}
+  currentTime={currentTime}
+  isPlaying={isPlaying}
+  onTimeChange={(time) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+    }
 
-          setCurrentTime(time);
-        }}
-        onTogglePlay={() => {
-          if (!audioRef.current) return;
+    setCurrentTime(time);
+  }}
+  onTogglePlay={() => {
+    if (!audioRef.current) return;
 
-          if (isPlaying) {
-            audioRef.current.pause();
-          } else {
-            audioRef.current.play();
-          }
-        }}
-      />
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+  }}
+/>
     </div>
   );
 }
