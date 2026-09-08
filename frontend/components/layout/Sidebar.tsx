@@ -210,7 +210,7 @@ export default function Sidebar() {
 
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-gray-800">
-                Suyash
+                Ashutosh
               </p>
               <p className="truncate text-xs text-gray-400">
                 Personal workspace
